@@ -2,7 +2,7 @@
 # Evolution of soil compaction and water content under intensive agriculture
 ## Project Description
 Describe the purpose of the program.
-the purpose of the program is to modelise the evolution of to parameters of a soil (water content and bulk density, which is related to compaction) under agrcicultural work. It plots modelised water content and bulk density over time and compares it to the same observed parameters, and checks its own realism by doing so.
+The purpose of the program is to modelise the evolution of two parameters of soil quality, water content and porosity, under agrcicultural work. It plots modelised + observed water content and porosity over time, allowing to check it accuracy.
 
 ## Input files
 Describe the input files used by the program. (Located in "data/".)
