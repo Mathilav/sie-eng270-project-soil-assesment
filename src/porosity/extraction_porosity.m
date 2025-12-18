@@ -1,4 +1,4 @@
-function extraction_porosity(input_file_agricultural_work, input_file_ITK, output_file)
+function extraction_porosity(input_file_agricultural_work, input_file_ITK, input_file_theta, output_file)
 
     %% 1) Tableau des opérations pour la parcelle 9
     
@@ -42,7 +42,7 @@ function extraction_porosity(input_file_agricultural_work, input_file_ITK, outpu
     
     %% 3) Ajouter le water content à partir de theta_output.csv
     
-    W = readtable('../premiere_partie_mathilde/theta_output.csv');
+    W = readtable(input_file_theta);
     % Colonnes : Date_Theta, theta
     W.Properties.VariableNames = {'Date_interv','WaterContent'};
     

@@ -119,7 +119,7 @@ static int lireFichierPorosite(const char *nom,
 
 /* ---------- Programme principal ---------- */
 
-int main(void)
+int main(int argc, char *argv[])
 {
     /* paramètres globaux du modèle */
     struct ParamsModele pm = {
@@ -136,7 +136,7 @@ int main(void)
     };
 
     /* 7 horizons */
-    const int NH = 7;
+    #define NH 7
     struct Horizon H[NH] = {
         {0.05, 1.13, 0.0},
         {0.10, 1.10, 0.0},

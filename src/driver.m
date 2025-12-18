@@ -29,6 +29,7 @@ out_poro_full_out = fullfile(resultsDir, 'data_porosity_full_out.csv');
 
 mesure2       = fullfile(projroot, 'data', 'mesures_porosity_2.csv');
 mesure1       = fullfile(projroot, 'data', 'mesures_porosity_1.csv');
+poro_plot_png  = fullfile(resultsDir, 'porosity_plot.png');
 theta_plot_png = fullfile(resultsDir, 'theta_obsVScomp_plot.png');
 
 cwd = pwd();
@@ -46,7 +47,7 @@ try
             % function now accepts (meteo_file, ray_file, out_csv)
             data_water_content(in_temp, in_ray, out_temp_ray);
         catch ME
-            warning('data_water_content failed: %s', E.message);
+            warning('data_water_content failed: %s', ME.message);
         end
     else
         warning('data_water_content not found in %s', src_wc);
@@ -102,9 +103,9 @@ try
     fprintf('Running extraction_porosity to create %s\n', out_poro_full);
     if exist('extraction_porosity','file') == 2 || exist('extraction_porosity','file') == 6
         try
-            extraction_porosity(in_travail, in_itk, out_poro_full);
+            extraction_porosity(in_travail, in_itk, theta_out, out_poro_full);
         catch ME
-            warning('extraction_porosity failed: %s', E.message);
+            warning('extraction_porosity failed: %s', ME.message);
         end
     else
         warning('extraction_porosity.m not found in %s', src_poro);
@@ -153,9 +154,9 @@ try
     fprintf('Calling plot_poro with porosity result and measurements\n');
     if exist('plot_poro','file') == 2 || exist('plot_poro','file') == 6
         try
-            plot_poro(out_poro_full_out, mesure2, mesure1, theta_plot_png);
+            plot_poro(out_poro_full_out, mesure2, mesure1, poro_plot_png);
         catch ME
-            warning('plot_poro failed: %s', E.message);
+            warning('plot_poro failed: %s', ME.message);
         end
     else
         warning('plot_poro not found in %s', src_plot);
@@ -167,7 +168,7 @@ try
         try
             plot_theta(theta_out, fullfile(projroot,'data','real_SWC.csv'), theta_plot_png);
         catch ME
-            warning('plot_theta failed: %s', E.message);
+            warning('plot_theta failed: %s', ME.message);
         end
     else
         warning('plot_theta not found in %s', src_plot);
