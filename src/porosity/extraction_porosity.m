@@ -1,92 +1,66 @@
-%% 1. Données d'opérations agricoles (parcelle 9)
+function extraction_porosity(input_file_agricultural_work, input_file_ITK, output_file)
 
-Tops = readtable('data_2/travail_agricole.csv');   % opérations
-numParcelle = 9;
-
-% Filtre parcelle
-Tops = Tops(Tops.Plot == numParcelle, :);
-
-% Colonnes utiles
-Tops = Tops(:, {'Crop','Date_interv','Passage','ITK'});
-
-% Jointure avec les caractéristiques d'ITK (tracteurs)
-TITK = readtable('data_2/ITK.csv');
-Tops.ITK = categorical(Tops.ITK);
-TITK.ITK = categorical(TITK.ITK);
-
-Tops = innerjoin(Tops, TITK, 'Keys', 'ITK');
-
-% On ne garde que date, passages et pression
-Tops = Tops(:, {'Date_interv','Passage','PressionMax_kPa_'});
-
-% Conversion des dates en entiers AAAAMMJJ
-dtOps = datetime(Tops.Date_interv, "InputFormat","dd/MM/yyyy");
-Tops.Date_interv = yyyymmdd(dtOps);
-
-% Tri chronologique
-Tops = sortrows(Tops, 'Date_interv');
-
-%% 2. Compléter avec les jours sans opération et initialiser WaterContent
-
-% Intervalle de dates complet
-dAll = datetime(string(Tops.Date_interv), "InputFormat","yyyyMMdd");
-dMin = min(dAll);
-dMax = max(dAll);
-
-allDates    = (dMin : dMax)';          % datetime
-allDatesNum = yyyymmdd(allDates);      % entiers AAAAMMJJ
-
-% Jours sans opération
-[~, idxMiss] = setdiff(allDatesNum, Tops.Date_interv);
-missingDates = allDatesNum(idxMiss);
-nMiss        = numel(missingDates);
-
-Tmissing = table;
-Tmissing.Date_interv      = missingDates;
-Tmissing.Passage          = zeros(nMiss,1);
-Tmissing.PressionMax_kPa_ = zeros(nMiss,1);
-
-% Ajouter la colonne WaterContent (0) dans les deux tables
-Tops.WaterContent     = zeros(height(Tops),1);
-Tmissing.WaterContent = zeros(height(Tmissing),1);
-
-% Concaténer et trier
-Tporosity = [Tops; Tmissing];
-Tporosity = sortrows(Tporosity, 'Date_interv');
-
-% Sauvegarde intermédiaire (optionnelle)
-writetable(Tporosity, "data_porosity_full.csv");
-
-%% 3. Injection du WaterContent calculé (theta_output.csv)
-
-Ttheta = readtable("theta_output.csv");      % colonnes : Date_Theta, Theta
-
-% Harmoniser la clé de jointure
-dtTheta = datetime(string(Ttheta.Date), "InputFormat","yyyyMMdd");
-Ttheta.Date_interv = yyyymmdd(dtTheta);
-Ttheta.Date  = [];
-
-% Renommer Theta -> WaterContent
-Ttheta.Properties.VariableNames{'Theta'} = 'WaterContent';
-
-% Jointure gauche : on garde toutes les lignes de Tporosity
-Tmerged = outerjoin(Tporosity, Ttheta, ...
-                    "Keys","Date_interv", ...
-                    "MergeKeys",true, ...
-                    "Type","left");
-
-% Après outerjoin, il peut rester deux colonnes WaterContent : choisit celle de theta
-if ismember('WaterContent_Tporosity', Tmerged.Properties.VariableNames)
-    wc_old = Tmerged.WaterContent_Tporosity; % si tu veux les garder pour vérifier
-    Tmerged.WaterContent_Tporosity = [];
-end
-if ismember('WaterContent_Ttheta', Tmerged.Properties.VariableNames)
-    Tmerged.Properties.VariableNames{'WaterContent_Ttheta'} = 'WaterContent';
-end
-
-% Remplacer les NaN éventuels (dates sans mesure) par 0 ou autre stratégie
-Tmerged.WaterContent(isnan(Tmerged.WaterContent)) = 0;
-
-% Tri final et écriture
-Tmerged = sortrows(Tmerged, 'Date_interv');
-writetable(Tmerged, "data_porosity_full.csv");
+    %% 1) Tableau des opérations pour la parcelle 9
+    
+    Tops = readtable(input_file_agricultural_work);
+    Ta   = readtable(input_file_ITK);
+    
+    % Filtre parcelle 9
+    Tops = Tops(Tops.Plot == 9, :);
+    
+    % Variables utiles et jointure avec ITK
+    Tops = Tops(:, {'Crop','Date_interv','Passage','ITK'});
+    Tops.ITK = categorical(Tops.ITK);
+    Ta.ITK   = categorical(Ta.ITK);
+    
+    Tops = innerjoin(Tops, Ta, 'Keys','ITK');
+    Tops = Tops(:, {'Date_interv','Passage','PressionMax_kPa_'});
+    
+    % Dates -> AAAAMMJJ
+    dt = datetime(Tops.Date_interv, "InputFormat","dd/MM/yyyy");
+    Tops.Date_interv = yyyymmdd(dt);
+    
+    % Tri
+    Tops = sortrows(Tops, 'Date_interv');
+    
+    %% 2) Compléter toutes les dates (jours sans opérations)
+    
+    d     = datetime(string(Tops.Date_interv), "InputFormat","yyyyMMdd");
+    allDn = yyyymmdd( (min(d):max(d))' );
+    
+    % Jours manquants
+    missing = setdiff(allDn, Tops.Date_interv);
+    nMiss   = numel(missing);
+    
+    Tmiss = table;
+    Tmiss.Date_interv      = missing;
+    Tmiss.Passage          = zeros(nMiss,1);
+    Tmiss.PressionMax_kPa_ = zeros(nMiss,1);
+    
+    OpsFull = [Tops; Tmiss];
+    OpsFull = sortrows(OpsFull, 'Date_interv');
+    
+    %% 3) Ajouter le water content à partir de theta_output.csv
+    
+    W = readtable('../premiere_partie_mathilde/theta_output.csv');
+    % Colonnes : Date_Theta, theta
+    W.Properties.VariableNames = {'Date_interv','WaterContent'};
+    
+    % S'assurer que Date_interv est numérique AAAAMMJJ
+    if ~isnumeric(W.Date_interv)
+        W.Date_interv = yyyymmdd( datetime(W.Date_interv,"InputFormat","yyyyMMdd") );
+    end
+    
+    % Jointure gauche : toutes les dates de OpsFull, theta quand dispo
+    OpsFull = outerjoin(OpsFull, W, ...
+        "Keys","Date_interv", ...
+        "Type","left", ...
+        "MergeKeys",true);
+    
+    % Remplacer les NaN de WaterContent par 0
+    OpsFull.WaterContent(ismissing(OpsFull.WaterContent)) = 0;
+    
+    % Écriture finale
+    writetable(OpsFull, output_file);
+    
+    end

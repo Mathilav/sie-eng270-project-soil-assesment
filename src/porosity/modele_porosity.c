@@ -152,17 +152,20 @@ int main(void)
         H[h].rho_a = H[h].pa0;
     }
 
+    const char *filename = (argc > 1 ? argv[1] : "results/data_porosity_full.csv");
+    const char *output_csv = (argc > 2 ? argv[2] : "results/data_porosity_full_out.csv");
+
     struct LignePorosite lignes[MAX_LIGNES];
-    int nb = lireFichierPorosite("data_porosity_full.csv",
+    int nb = lireFichierPorosite(filename,
                                  lignes, MAX_LIGNES);
     if (nb <= 0) {
         fprintf(stderr, "Erreur lecture fichier, nb = %d\n", nb);
         return 1;
     }
 
-    FILE *fout = fopen("data_porosity_full_out.csv", "w");
+    FILE *fout = fopen(output_csv, "w");
     if (fout == NULL) {
-        fprintf(stderr, "Impossible d'ouvrir data_porosity_full_out.csv\n");
+        fprintf(stderr, "Impossible d'ouvrir %s\n", output_csv);
         return 1;
     }
 

@@ -373,7 +373,8 @@ int main(int argc, char *argv[]) {
     double thetaS = 0.45; /* Saturated water content [mm^3/mm^3]*/
     double root_depth = 35.0; /* Root depth [cm]*/
 
-    const char *filename = (argc > 1 ? argv[1] : "Temp_prec_ray.csv");
+    const char *filename = (argc > 1 ? argv[1] : "results/Temp_prec_ray.csv");
+    const char *output_csv = (argc > 2 ? argv[2] : "results/theta_output.csv");
 
     struct Temp_Prec_Ray *meteos = NULL;
     ssize_t nb = lireFichier(filename, &meteos);
@@ -418,8 +419,8 @@ int main(int argc, char *argv[]) {
         }
     
         /* Save to CSV */
-        if (save_theta_csv("theta_output.csv", meteos, theta, nb - 1)) {
-            printf("Theta saved to theta_output.csv\n");
+        if (save_theta_csv(output_csv, meteos, theta, nb - 1)) {
+            printf("Theta saved to %s\n", output_csv);
         } else {
             fprintf(stderr, "Failed to save theta CSV.\n");
         }

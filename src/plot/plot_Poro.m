@@ -1,89 +1,112 @@
-%% 1) Lecture des fichiers
-T = readtable('deuxieme_partie_density/porosity_results.csv');
-P = readtable('deuxieme_partie_density/data_2/Bulk_density1.csv');
+function plot_poro(input_file_V, input_file_P, input_file_T, output_png_file)
 
-%% 2) Dates de T : AAAAMMJJ -> datetime JJ/MM/AAAA
-if isnumeric(T.Date_interv)
-    T.Date_interv = datetime(T.Date_interv, 'ConvertFrom','yyyymmdd');
-else
-    T.Date_interv = datetime(string(T.Date_interv), 'InputFormat','yyyyMMdd');
-end
-T.Date_interv.Format = 'dd/MM/yyyy';
+%% Lecture des deux fichiers de BD
+V = readtable(input_file_V);
 
-%% 3) Correction des dates dans P (2 chiffres d'année -> 19xx), UNE FOIS
-date_str_short = string(datestr(P.DateOfMeasurement, 'dd/mm/yy'));  % "12/11/92"
-parts    = split(date_str_short, "/");
-dayStr   = parts(:,1);
-monthStr = parts(:,2);
-year2Str = parts(:,3);
-year4Str = "19" + year2Str;                       % "92" -> "1992"
-date_str_full = dayStr + "/" + monthStr + "/" + year4Str;
-P.DateOfMeasurement = datetime(date_str_full, 'InputFormat','dd/MM/yyyy');
-P.DateOfMeasurement.Format = 'dd/MM/yyyy';
+% Conversion des dates AAAAMMJJ -> datetime
+V.Date_interv = datetime(V.Date_interv, ...
+                         'ConvertFrom','yyyymmdd');   % ex: 19910305 -> 05/03/1991
 
-%% 4) Filtrage des données
-horizon1 = 1;
+% ---- Bulk_density2_modif2.csv  -> P ----
+P = readtable(input_file_P);
+P.lower_limit_int = ceil(P.lower_limit_int / 5) * 5;   % arrondi multiple de 5
+
+% ---- Bulk_density1_modif.csv  -> T ----
+T = readtable(input_file_T);
+
+%% Concaténation verticale : T puis P
+Tsub = T(:, {'Plot','DateOfMeasurement','LowerLimit_cm_','Poro_mean'});
+Tsub.Properties.VariableNames = {'Plot','DateOfMeasurement','lower_limit_int','Porosity'};
+
+Psub = P(:, {'Plot','DateOfMeasurement','lower_limit_int','Poro'});
+Psub.Properties.VariableNames = {'Plot','DateOfMeasurement','lower_limit_int','Porosity'};
+
+BigTable = [Tsub ; Psub];
+
+%% Filtre horizon 1 et plot pour BigTable
+horizon1 = 5;
 plot1    = 1;
 
-% T : Horizon = 1
-mask_h1_T = (T.Horizon == horizon1);
-T_h1      = T(mask_h1_T, :);
-dates_T   = T_h1.Date_interv;
-poro_T    = T_h1.Porosity;
+mask_h1_Big = (BigTable.lower_limit_int == horizon1);
+Big_h1      = BigTable(mask_h1_Big, :);
 
-% P : Horizon = 1 & Plot = 1
-mask_h1_P = (P.Horizon == horizon1);
-mask_p1   = (P.Plot    == plot1);
-P_sel     = P(mask_h1_P & mask_p1, :);
+mask_plot1  = (Big_h1.Plot == plot1);
+big_final1  = Big_h1(mask_plot1,:);
 
-% S'assurer que Poro_mean est numérique
-if isnumeric(P_sel.Poro_mean)
-    poro_P = P_sel.Poro_mean;
-else
-    tmp    = strtrim(string(P_sel.Poro_mean));
-    tmp    = strrep(tmp, ',', '.');
-    poro_P = str2double(tmp);
-    P_sel.Poro_mean = poro_P;
-end
+dates_Big_h1 = big_final1.DateOfMeasurement;
+poro_Big_h1  = big_final1.Porosity;
 
-%% 5) Moyenne par jour de Poro_mean dans P_sel, SANS toucher aux dates
-dates_P = P_sel.DateOfMeasurement;   % datetime déjà corrigé
+%% Filtre correspondant dans V pour horizon 1
+h1 = 1;
+mask_h1_V   = (V.Horizon == h1);
+filtered_V_h1 = V(mask_h1_V, :);
 
-% Dates uniques (jours)
-uniqueDates = unique(dates_P);
+dates_V_h1 = filtered_V_h1.Date_interv;
+poro_V_h1  = filtered_V_h1.Porosity;
 
-% Pré-allocation
-poroP_mean  = nan(size(uniqueDates));
-for k = 1:numel(uniqueDates)
-    d = uniqueDates(k);
-    % logique : même jour (ignorer l'heure si jamais il y en avait)
-    mask_d = dateshift(dates_P,'start','day') == dateshift(d,'start','day');
-    poroP_mean(k) = mean(poro_P(mask_d), 'omitnan');
-end
-datesP_mean = uniqueDates;   % ce sont les mêmes datetime que dans P_sel, sans recalcule
+%% Filtre horizon 5 (25 cm dans BigTable) et plot pour BigTable
+horizon5 = 25;
+plot1    = 1;
 
-%% 6) Plot : Porosity(T) + moyenne quotidienne de P
+mask_h5_Big = (BigTable.lower_limit_int == horizon5);
+Big_h5      = BigTable(mask_h5_Big, :);
+
+mask_plot1_5 = (Big_h5.Plot == plot1);
+big_final5   = Big_h5(mask_plot1_5,:);
+
+dates_Big_h5 = big_final5.DateOfMeasurement;
+poro_Big_h5  = big_final5.Porosity;
+
+%% Filtre correspondant dans V pour horizon 5
+h5 = 5;
+mask_h5_V    = (V.Horizon == h5);
+filtered_V_h5 = V(mask_h5_V, :);
+
+dates_V_h5 = filtered_V_h5.Date_interv;
+poro_V_h5  = filtered_V_h5.Porosity;
+
+%% Calcul somme des pressions par jour
+G = groupsummary(V, "Date_interv", "day", "sum", "PressionMax_kPa");
+% G.day_Date_interv : dates (une par jour)
+% G.sum_PressionMax_kPa : somme des pressions pour cette date
+
+%% Plots : trois sous-graphes sur la même figure
 figure;
+
+% -------- Horizon 1 --------
+subplot(3,1,1);
+plot(dates_Big_h1, poro_Big_h1, '-o', 'DisplayName','BD (T+P) - H1');
 hold on;
-
-% Points bruts de T (bleu)
-scatter(dates_T, poro_T, 20, 'filled', ...
-        'MarkerFaceColor',[0.2 0.4 0.8], ...
-        'DisplayName','Porosity (T)');
-
-% Moyenne quotidienne de P : points rouges + ligne noire
-plot(datesP_mean, poroP_mean, '-k', ...
-     'LineWidth',1.5, 'DisplayName','Poro\_mean quotidien (P)');
-
-scatter(datesP_mean, poroP_mean, 60, 'r', 'filled', ...
-        'DisplayName','Poro\_mean (points P)');
-
+plot(dates_V_h1,   poro_V_h1,   '-s', 'DisplayName','Vérif - H1');
 hold off;
-xlabel('Date (JJ/MM/AAAA)');
+xlabel('Date');
 ylabel('Porosité');
-title('Porosité : T vs moyenne quotidienne de P (Horizon 1, Plot 1)');
+title('Porosité vs temps, horizon 1 / plot 1');
 legend('Location','best');
 grid on;
 
-ax = gca;
-ax.XAxis.TickLabelFormat = 'dd/MM/yyyy';
+% -------- Horizon 5 --------
+subplot(3,1,2);
+plot(dates_Big_h5, poro_Big_h5, '-o', 'DisplayName','BD (T+P) - H5');
+hold on;
+plot(dates_V_h5,   poro_V_h5,   '-s', 'DisplayName','Vérif - H5');
+hold off;
+xlabel('Date');
+ylabel('Porosité');
+title('Porosité vs temps, horizon 5 / plot 1');
+legend('Location','best');
+grid on;
+
+% -------- Somme des pressions --------
+subplot(3,1,3);
+plot(dates_V_h5, G.sum_PressionMax_kPa, '-o', 'LineWidth', 1.5);
+grid on;
+xlabel('Date');
+ylabel('Somme des pressions (kPa)');
+title('Somme des pressions appliquées au sol par date');
+
+
+% Save figure
+saveas(gcf, output_png_file);
+
+end
