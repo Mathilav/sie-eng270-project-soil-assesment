@@ -1,8 +1,32 @@
+%% Lecture des deux fichiers de BD
+
+V = readtable('data_porosity_full_out.csv');       
+% Conversion des dates AAAAMMJJ -> datetime
+% (accepte numeric ou string/char)
+V.Date_interv = datetime(V.Date_interv, ...
+                         'ConvertFrom','yyyymmdd');      % ex: 19910305 -> 05/03/1991
+
+% ---- Bulk_density2_modif1.csv  -> P ----
+P        = readtable('Bulk_density2_modif2.csv');
+P.lower_limit_int = ceil(P.lower_limit_int / 5) * 5;       
+
+% ---- Bulk_density1_modif.csv  -> T ----
+T        = readtable('Bulk_density1_modif.csv');
+
+%% Concaténation verticale : T puis P
+Tsub = T(:, {'Plot','DateOfMeasurement','LowerLimit_cm_','Poro_mean'});
+Tsub.Properties.VariableNames = {'Plot','DateOfMeasurement','lower_limit_int','Porosity'};
+
+Psub = P(:, {'Plot','DateOfMeasurement','lower_limit_int','Poro'});
+Psub.Properties.VariableNames = {'Plot','DateOfMeasurement','lower_limit_int','Porosity'};
+
+BigTable = [Tsub ; Psub];
+
 %% Filtre horizon 1 et plot pour BigTable
 horizon1 = 5;
 plot1    = 1;
 
-mask_h1_Big = (BigTable.LowerLimit == horizon1);
+mask_h1_Big = (BigTable.lower_limit_int == horizon1);
 Big_h1      = BigTable(mask_h1_Big, :);          % lignes horizon 1
 mask_plot1  = (Big_h1.Plot == plot1);
 big_final1  = Big_h1(mask_plot1,:);
@@ -22,7 +46,7 @@ poro_V_h1  = filtered_V_h1.Porosity;
 horizon5 = 25;
 plot1    = 1;                                    % même plot
 
-mask_h5_Big = (BigTable.LowerLimit == horizon5);
+mask_h5_Big = (BigTable.lower_limit_int == horizon5);
 Big_h5      = BigTable(mask_h5_Big, :);          % lignes horizon 5
 mask_plot1_5 = (Big_h5.Plot == plot1);
 big_final5   = Big_h5(mask_plot1_5,:);
