@@ -71,7 +71,7 @@ try
         if ispc; exe_name = [exe_name '.exe']; end
         exe_path = fullfile(bin_dir, exe_name);
         if ~exist(exe_path,'file')
-            gcc_cmd = sprintf('gcc -O2 -o "%s" "%s"', exe_path, c_src_wc);
+            gcc_cmd = sprintf('gcc -O2 -o "%s" "%s" -lm', exe_path, c_src_wc);
             fprintf('Compiling %s\n', c_src_wc);
             [st,out] = system(gcc_cmd);
             if st ~= 0
@@ -122,7 +122,7 @@ try
         if ispc; exe_poro = [exe_poro '.exe']; end
         exe_poro_path = fullfile(bin_dir, exe_poro);
         if ~exist(exe_poro_path,'file')
-            gcc_cmd = sprintf('gcc -O2 -o "%s" "%s"', exe_poro_path, c_src_poro);
+            gcc_cmd = sprintf('gcc -O2 -o "%s" "%s" -lm', exe_poro_path, c_src_poro);
             fprintf('Compiling %s\n', c_src_poro);
             [st,out] = system(gcc_cmd);
             if st ~= 0

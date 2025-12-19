@@ -83,8 +83,9 @@ function plot_poro(input_file_V, input_file_P, input_file_T, output_png_file)
         fig = figure('Visible', 'on');
     
         % -------- Horizon 1 --------
+        
         subplot(3, 1, 1);
-        plot(dates_big_h1, poro_big_h1, '-o', 'DisplayName', 'Mesures - H1');
+        plot(dates_big_h1, poro_big_h1, '-o', 'DisplayName', 'Mesures H1');
         hold on;
         plot(dates_V_h1,   poro_V_h1,   '-s', 'DisplayName', 'Porosity modele - H1');
         hold off;
@@ -96,7 +97,7 @@ function plot_poro(input_file_V, input_file_P, input_file_T, output_png_file)
     
         % -------- Horizon 5 --------
         subplot(3, 1, 2);
-        plot(dates_big_h5, poro_big_h5, '-o', 'DisplayName', 'Mesures - H5');
+        plot(dates_big_h5, poro_big_h5, '-o', 'DisplayName', 'Mesures H5');
         hold on;
         plot(dates_V_h5,   poro_V_h5,   '-s', 'DisplayName', 'Porosity modele - H5');
         hold off;
