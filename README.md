@@ -51,19 +51,26 @@ C compiler
     * modele_porosity.c
 * All the C files are save to bin. 
 The compiler is invoked automatically from MATLAB using system calls.
+
 External libraries
 * None
 All C code relies exclusively on the standard C library.
+
 File formats
+
 * Input and output data are handled using CSV files.
 * Figures are exported as PNG images.
+
+
 Notes
+
 * Ensure that gcc is available in the system PATH.
 * MATLAB must be able to execute system commands.
 * All generated files are written to the results/ directory.
 
 ## Build
 The C programs used in this project are compiled using GCC and do not rely on MATLAB MEX interfaces.
+
 The C files are saved to "bin/" directory by the compiler.
 
 ## Execute
@@ -79,7 +86,9 @@ Data Sources :
  J. R. Lamichhane et al. “Effect of cropping systems and climate on soil physical characteristics, field crop
 emergence and yield: A dataset from a 19-year field experiment”. In: Data in Brief 39 (Dec. 2021), p. 107581.
 doi: 10.1016/j.dib.2021.10758
+
 *Meteorological informations : Météo France. Météo.data.gouv.fr
+
 *Note : the other references used to built the theoritical model but not directly present in the code are listed and explained in the report. 
 
 Code
