@@ -3,28 +3,26 @@
 #include <math.h>
 #include <string.h>
 #include <ctype.h>
+
 /*==========================================================
-Importation d'un csv
+  CSV import: Temp_prec_ray.csv
+  Columns: AAAAMMJJ, RR, TNTXM, TNTXM_moy_mois, GLOT_moy_mois
+  RR               : daily precipitation
+  TNTXM            : daily mean temperature
+  TNTXM_moy_mois   : monthly mean temperature
+  GLOT_moy_mois    : monthly mean solar radiation
 ==========================================================*/
-/*Note sur les infos du csv Temp_prec_ray.csv 
-AAAAMMJJ,RR,TNTXM,TNTXM_moy_mois,GLOT_moy_mois 
-RR = prec
-TNTXM = temperature moy journee 
-TNTXM_moy_mois. = par mois
-GLOT_moy_mois = rayonnement par mois*/
 
-/*code inspired by sieprog.ch, exercice pointsgps, puis upgrape chatgpt*/ 
-
-/* Structure of the table*/
-struct Temp_Prec_Ray {
-    int AAAAMMJJ;
+/* Data structure for one meteorological record */
+struct TempPrecRad {
+    int    AAAAMMJJ;
     double RR;
     double TNTXM;
-    double TNTXM_moy_mois;
-    double GLOT_moy_mois;
+    double TNTXM_monthly_mean;
+    double GLOT_monthly_mean;
 };
 
-/* Trim newline from a string */
+/* Trim newline characters from a string */
 static void trim_newline(char *s) {
     size_t n = strlen(s);
     while (n > 0 && (s[n - 1] == '\n' || s[n - 1] == '\r')) {
@@ -32,14 +30,14 @@ static void trim_newline(char *s) {
     }
 }
 
-/* Read one CSV line into struct. Returns 1=OK, 0=bad line */
-int parse_csv_line(const char *line, struct Temp_Prec_Ray *m) {
+/* Parse one CSV line into struct. Returns 1 if OK, 0 otherwise */
+int parse_csv_line(const char *line, struct TempPrecRad *m) {
     char buf[256];
     strncpy(buf, line, sizeof(buf));
-    buf[sizeof(buf)-1] = 0;
+    buf[sizeof(buf) - 1] = 0;
 
     /* Split into tokens */
-    char *tok = NULL;
+    char *tok  = NULL;
     char *rest = buf;
 
     char *fields[5];
@@ -58,20 +56,21 @@ int parse_csv_line(const char *line, struct Temp_Prec_Ray *m) {
     m->AAAAMMJJ = strtol(fields[0], &e, 10);
     if (*e) return 0;
 
-    m->RR = strtod(fields[1], &e); if (*e) return 0;
-    m->TNTXM = strtod(fields[2], &e); if (*e) return 0;
-    m->TNTXM_moy_mois = strtod(fields[3], &e); if (*e) return 0;
-    m->GLOT_moy_mois = strtod(fields[4], &e); if (*e) return 0;
+    m->RR                 = strtod(fields[1], &e); if (*e) return 0;
+    m->TNTXM              = strtod(fields[2], &e); if (*e) return 0;
+    m->TNTXM_monthly_mean = strtod(fields[3], &e); if (*e) return 0;
+    m->GLOT_monthly_mean  = strtod(fields[4], &e); if (*e) return 0;
 
     return 1;
 }
 
-/* Read whole CSV into dynamically-grown array */
-ssize_t lireFichier(const char *filename, struct Temp_Prec_Ray **out) {
+/* Read whole CSV into dynamically grown array.
+   Returns number of records, -1 on error. */
+ssize_t read_meteo_file(const char *filename, struct TempPrecRad **out) {
     FILE *f = fopen(filename, "r");
     if (!f) return -1;
 
-    struct Temp_Prec_Ray *arr = NULL;
+    struct TempPrecRad *arr = NULL;
     size_t cap = 0, n = 0;
 
     char line[256];
@@ -84,11 +83,15 @@ ssize_t lireFichier(const char *filename, struct Temp_Prec_Ray **out) {
 
         /* Detect header: contains alphabetic characters */
         int header = 0;
-        for (int i = 0; line[i]; i++)
-            if (isalpha((unsigned char)line[i])) header = 1;
+        for (int i = 0; line[i]; i++) {
+            if (isalpha((unsigned char)line[i])) {
+                header = 1;
+                break;
+            }
+        }
 
         if (!header) {
-            struct Temp_Prec_Ray m;
+            struct TempPrecRad m;
             if (parse_csv_line(line, &m)) {
                 if (n >= cap) {
                     cap = cap ? cap * 2 : 1024;
@@ -106,7 +109,7 @@ ssize_t lireFichier(const char *filename, struct Temp_Prec_Ray **out) {
         lineno++;
         trim_newline(line);
 
-        struct Temp_Prec_Ray m;
+        struct TempPrecRad m;
         if (parse_csv_line(line, &m)) {
             if (n >= cap) {
                 cap = cap ? cap * 2 : 1024;
@@ -120,37 +123,42 @@ ssize_t lireFichier(const char *filename, struct Temp_Prec_Ray **out) {
 
     fclose(f);
 
-    /* shrink memory to actual size */
-    arr = realloc(arr, n * sizeof(*arr));
+    /* Shrink memory to actual size */
+    if (n > 0) {
+        arr = realloc(arr, n * sizeof(*arr));
+    }
 
     *out = arr;
     return n;
 }
 
-void afficher(const struct Temp_Prec_Ray *m) {
+/* Print one meteorological record to stdout */
+void print_meteo(const struct TempPrecRad *m) {
     printf("%d  %.2f  %.2f  %.2f  %.2f\n",
            m->AAAAMMJJ,
            m->RR,
            m->TNTXM,
-           m->TNTXM_moy_mois,
-           m->GLOT_moy_mois);
+           m->TNTXM_monthly_mean,
+           m->GLOT_monthly_mean);
 }
 
 /*==========================================================
-    Exportation d'un csv 
+  CSV export for theta
 ==========================================================*/
 
 /* Save theta values to a CSV file with Date column */
-int save_theta_csv(const char *filename, const struct Temp_Prec_Ray *data, const double *theta, int n) {
+int save_theta_csv(const char *filename,
+                   const struct TempPrecRad *data,
+                   const double *theta, int n) {
     FILE *f = fopen(filename, "w");
     if (!f) {
         perror("Cannot open output file");
         return 0;
     }
 
-    fprintf(f, "Date,Theta\n"); // header
+    fprintf(f, "Date,Theta\n"); /* header */
 
-    for (int i = 0; i <= n; i++) {
+    for (int i = 0; i < n; i++) {
         fprintf(f, "%d,%.10f\n", data[i].AAAAMMJJ, theta[i]);
     }
 
@@ -159,31 +167,24 @@ int save_theta_csv(const char *filename, const struct Temp_Prec_Ray *data, const
 }
 
 /*==========================================================
-  Evapotranspiration
+  Date utilities
 ==========================================================*/
-// double Evapotranspriation(
-//     double Rs, /* a table of values of monthly solar radiations [cal /cm^2 * J]*/
-//     double T /* a table of monthly temperatures in celsius*/)
-//     {
-//     double ETp = 0.4 * (Rs + 50) * T / (T + 15);
-//     return ETp;
-//     } /* serait-ce plus utile de faire un malloc ? */
 
-/*Getting days distribution from data dates*/
 int is_leap(int year)
 {
     return (year % 4 == 0 && year % 100 != 0) ||
-            (year % 400 == 0);
+           (year % 400 == 0);
 }
+
 void split_date(int yyyymmdd, int *year, int *month, int *day)
 {
-    *year  = yyyymmdd / 10000;       // YYYY
-    *month = (yyyymmdd / 100) % 100; // MM
-    *day   = yyyymmdd % 100;         // DD
+    *year  = yyyymmdd / 10000;       /* YYYY */
+    *month = (yyyymmdd / 100) % 100; /* MM   */
+    *day   = yyyymmdd % 100;         /* DD   */
 }
 
 int days_in_month_from_date(int yyyymmdd)
-    {
+{
     int year, month, day;
     split_date(yyyymmdd, &year, &month, &day);
 
@@ -194,166 +195,128 @@ int days_in_month_from_date(int yyyymmdd)
         return 29;
 
     return days_norm[month - 1];
-    }
+}
 
-/*computiong Evap per day*/
-double *Evapotranspiration_days(const struct Temp_Prec_Ray *data, int Time){
-    /*input :   Temperature = double TNTXM_moy_mois
-                Radiations = double GLOT_moy_mois data a priori [joule/cm^2], on veut [cal/cm^2 * J]
+/*==========================================================
+  Evapotranspiration (Turc, daily distribution)
+==========================================================*/
 
-                (what we want to use as arg)
-    output : ET_days = ETp (turc's formula) / nbr of days in a month*/
-    
+/* Compute daily potential ET from monthly mean radiation and temperature */
+double *Evapotranspiration_days(const struct TempPrecRad *data, int n_days)
+{
+    /* Output: ET_days[d] = ETp_month / days_in_month, converted to mm/day */
 
-    double *ET_days = malloc((Time + 1) * sizeof(double));
+    double *ET_days = malloc((n_days + 1) * sizeof(double));
     if (!ET_days) return NULL;
 
-    for (int d = 0; d <= Time; d++) {
+    for (int d = 0; d <= n_days; d++) {
 
-        int y = data[d].AAAAMMJJ;
-        int days = days_in_month_from_date(y);
+        int days = days_in_month_from_date(data[d].AAAAMMJJ);
 
-        double T = data[d].TNTXM_moy_mois;
+        double T = data[d].TNTXM_monthly_mean;
 
-        /* conversion [joule/cm^2] -> [cal/cm^2 * J]*/
-        double R = data[d].GLOT_moy_mois / 4.184;
+        /* Convert [J/cm^2] -> [cal/cm^2] */
+        double R = data[d].GLOT_monthly_mean / 4.184;
 
-        // Compute monthly ET using Turc
-        double ET_month = 0.4 * (R + 50) * T / (T + 15); //[cm/month]
+        /* Monthly ET using Turc (cm/month) */
+        double ET_month = 0.4 * (R + 50.0) * T / (T + 15.0);
 
-        // Daily ET distribution
-        ET_days[d] = 10 * ET_month / days; // [mm/day]
+        /* Daily ET distribution in mm/day */
+        ET_days[d] = 10.0 * ET_month / days;
     }
 
     return ET_days;
 }
 
-
-
 /*==========================================================
   Infiltration (Philip)
 ==========================================================*/
+
 double infiltration(double S, int t, double A1)
-    {/* Imput: 
-        S  : sorptivité [mm / √day]
-        t  : day of evaluation
-        A1 : influence gravitaire [mm / day]
-        Output:
-        evaluation of I at i */
-    return S * sqrt(t) + A1 * t;
+{
+    /* I(t) = S * sqrt(t) + A1 * t */
+    return S * sqrt((double)t) + A1 * (double)t;
 }
 
-/* Renvoie un tableau dynamique → doit être free() après usage */
+/* Return dynamic array of daily infiltration increments.
+   Caller must free(). */
 double *compute_infiltration(double S, int time, double A1)
-{   /*Imput:
-        S  : sorptivité 
-        A1 : influence gravitaire
-        time : maximum time of evaluation
-    Output:
-        I_evaluation : a table of discrete value of inflitration for each day
-    
-    */
-    
+{
     double *I_evaluation = malloc((time + 1) * sizeof(double));
     if (!I_evaluation) return NULL;
 
-    I_evaluation[0] = infiltration(S, 0, A1); // infiltration at day 0
+    /* Infiltration at day 0 */
+    I_evaluation[0] = infiltration(S, 0, A1);
 
-    for (int i = 1; i <= time; i++)
-        I_evaluation[i] = infiltration(S, i, A1) - infiltration(S, i-1, A1); // daily infiltration
+    /* Daily increments: I(t) - I(t-1) */
+    for (int i = 1; i <= time; i++) {
+        I_evaluation[i] = infiltration(S, i, A1) - infiltration(S, i - 1, A1);
+    }
 
-    return I_evaluation;  
-    /* NE PAS free ici → on doit le faire APRES l’utilisation */}
-
+    return I_evaluation;
+}
 
 /*==========================================================
- Water content
+  Water content
 ==========================================================*/
 
 double *compute_Watercontent(int Time,
-    const struct Temp_Prec_Ray *data,
+    const struct TempPrecRad *data,
     double Radiation[],
     double Temperature[],
     double Sorptivity,
     double A1,
-    double D, 
+    double D,
     double theta0,
     double theta_fc,
     double thetaR,
     double thetaS,
     double root_depth)
-{   
-    /* Input:
-        Time: maximum time of evaluation
-        Radiation: array of radiation values [J /cm^2] (formula will convert to [cal/cm^2 * J])
-        Temperature: array of temperature values [°C]
-        Sorptivity: sorptivity value [mm/ √day]
-        A1: gravitational influence [mm/day]
-        Drainage: drainage value if the soil is sat, 0 otherwise [mm/day]
-        theta0: initial water content (from data)
-        theta_fc: field capacity [mm^3/mm^3]
-        thetaR: residual water content [mm^3/mm^3]
-        thetaS: saturated water content [mm^3/mm^3]
-        root_depth: depth of the root zone [cm]
-       Output:
-        theta: the evaluation of the water content for each day
-    */
+{
+    /* Compute daily soil water content over [0..Time].
+       Radiation and Temperature arrays are currently not used directly,
+       because ET is recomputed from data (GLOT, TNTXM). */
 
-    /* Allocate result */
     double *theta = malloc((Time + 1) * sizeof(double));
     if (!theta) return NULL;
 
     double *I = compute_infiltration(Sorptivity, Time, A1);
-    if (!I) { 
-        free(theta); 
-        return NULL; 
+    if (!I) {
+        free(theta);
+        return NULL;
     }
-    printf("Infiltration computed.,'%f'\n", I[0]);
+    printf("Infiltration computed (example I[0] = %f)\n", I[0]);
 
     double *ET_days = Evapotranspiration_days(data, Time);
     if (!ET_days) {
         fprintf(stderr, "Memory allocation failed for ET_days.\n");
         free(theta);
         free(I);
-        return NULL; // Return NULL instead of 1
+        return NULL;
     }
-    printf("Evapotranspiration computed.'%f'\n", ET_days[0]);
+    printf("Evapotranspiration computed (example ET_days[0] = %f)\n", ET_days[0]);
 
-    /* INITIAL VALUE */
+    /* Initial condition */
     theta[0] = theta0;
-    double Drainage = 0; /* assume theta0 =! thetaS, not saturated*/
 
-    /* CUMULATIVE EVOLUTION */
-    // for (int d = 1; d <= Time; d++) {
-    //     theta[d] = theta[d-1] + (1.0 / (root_depth * 10.0)) * ( I[d] - ET_days[d] - Drainage);
-    //     if (theta[d] < 0) theta[d] = 0; /* water content cannot be negative */
-    //     /*set drainage at each it dep on sat or not*/
-    //     if (theta[d] >= thetaS) {
-    //         theta[d] = thetaS; /* saturated */
-    //         Drainage = D; /* apply drainage */
-    //     } else {
-    //         Drainage = 0; /* no drainage */
-    //     /* set ET dep on dry or not*/
-    //     double stress = fmin(1.0, theta[d-1] / theta_fc);
-    //     ET_days[d] *= stress; /* reduce ET if dry */
-    //     }
-    // }
+    /* Daily water balance with ET stress and drainage */
     for (int d = 1; d <= Time; d++) {
 
-        /* ET stress, decrease ET if dry soil*/
+        /* ET stress: reduce ET if soil is dry */
         double ETa = ET_days[d];
-        double stress = fmin(1.0, theta[d-1] / theta_fc);
+        double stress = fmin(1.0, theta[d - 1] / theta_fc);
         ETa *= stress;
-    
+
         /* Drainage only if saturated */
-        double Drainage_d = (theta[d-1] >= thetaS) ? D : 0.0;
-    
-        /* Water balance */
-        theta[d] = theta[d-1] + (I[d] - ETa - Drainage_d) / (root_depth * 10.0);
-    
+        double Drainage_d = (theta[d - 1] >= thetaS) ? D : 0.0;
+
+        /* Water balance in root zone */
+        theta[d] = theta[d - 1] +
+                   (I[d] - ETa - Drainage_d) / (root_depth * 10.0);
+
         /* Physical bounds */
-        if (theta[d] < thetaR) theta[d] = thetaR; /* water content cannot be under the residual theta*/
-        if (theta[d] > thetaS) theta[d] = thetaS; /* cannot exceed saturation */
+        if (theta[d] < thetaR) theta[d] = thetaR;
+        if (theta[d] > thetaS) theta[d] = thetaS;
     }
 
     free(I);
@@ -362,39 +325,43 @@ double *compute_Watercontent(int Time,
     return theta;
 }
 
-int main(int argc, char *argv[]) {
-    /* values for silt loam USDA / Rawls et al.*/
-    double Sorptivity = 22.50; // [mm/ √day]
-    double A1 = 5.00; // [mm/ day]
-    double Drainage = 0.001; /* Placeholder value [mm/day]*/
-    double Theta0 = 0.30; /* Initial water content [mm^3/mm^3]*/
-    double theta_fc = 0.27; /* field capacity [mm^3/mm^3]*/
-    double thetaR = 0.06; /* Residual water content [mm^3/mm^3]*/
-    double thetaS = 0.45; /* Saturated water content [mm^3/mm^3]*/
-    double root_depth = 35.0; /* Root depth [cm]*/
+/*==========================================================
+  Main
+==========================================================*/
 
-    const char *filename = (argc > 1 ? argv[1] : "results/Temp_prec_ray.csv");
+int main(int argc, char *argv[]) {
+    /* Parameters for silt loam (USDA / Rawls et al.) */
+    double Sorptivity = 22.50;   /* [mm / sqrt(day)] */
+    double A1         = 5.00;    /* [mm / day]       */
+    double Drainage   = 0.001;  /* placeholder [mm/day] */
+    double Theta0     = 0.30;    /* initial water content [m3/m3] */
+    double theta_fc   = 0.27;    /* field capacity [m3/m3] */
+    double thetaR     = 0.06;    /* residual water content [m3/m3] */
+    double thetaS     = 0.45;    /* saturated water content [m3/m3] */
+    double root_depth = 35.0;    /* root depth [cm] */
+
+    const char *filename   = (argc > 1 ? argv[1] : "results/Temp_prec_ray.csv");
     const char *output_csv = (argc > 2 ? argv[2] : "results/theta_output.csv");
 
-    struct Temp_Prec_Ray *meteos = NULL;
-    ssize_t nb = lireFichier(filename, &meteos);
+    struct TempPrecRad *meteos = NULL;
+    ssize_t nb = read_meteo_file(filename, &meteos);
 
     if (nb < 0) {
-        fprintf(stderr, "Erreur: impossible d'ouvrir '%s'\n", filename);
+        fprintf(stderr, "Error: cannot open '%s'\n", filename);
         return 1;
     }
     if (nb == 0) {
-        fprintf(stderr, "Aucune ligne valide.\n");
+        fprintf(stderr, "No valid lines in input file.\n");
         return 1;
     }
 
-    printf("Lues %zd lignes.\n", nb);
-    printf("Premières lignes :\n");
+    printf("Read %zd lines.\n", nb);
+    printf("First lines:\n");
+    for (int i = 0; i < nb && i < 10; i++) {
+        print_meteo(&meteos[i]);
+    }
 
-    for (int i = 0; i < nb && i < 10; i++)
-        afficher(&meteos[i]);
-
-    double *radiation = malloc(nb * sizeof(double));
+    double *radiation   = malloc(nb * sizeof(double));
     double *temperature = malloc(nb * sizeof(double));
     if (!radiation || !temperature) {
         fprintf(stderr, "Memory allocation failed.\n");
@@ -405,28 +372,37 @@ int main(int argc, char *argv[]) {
     }
 
     for (int i = 0; i < nb; i++) {
-        radiation[i] = meteos[i].GLOT_moy_mois;
-        temperature[i] = meteos[i].TNTXM_moy_mois;
+        radiation[i]   = meteos[i].GLOT_monthly_mean;
+        temperature[i] = meteos[i].TNTXM_monthly_mean;
     }
 
-    double *theta = compute_Watercontent(nb-1, meteos, radiation, temperature, Sorptivity, A1, Drainage, Theta0, theta_fc, thetaR, thetaS, root_depth);
+    double *theta = compute_Watercontent((int)nb - 1,
+                                         meteos,
+                                         radiation,
+                                         temperature,
+                                         Sorptivity,
+                                         A1,
+                                         Drainage,
+                                         Theta0,
+                                         theta_fc,
+                                         thetaR,
+                                         thetaS,
+                                         root_depth);
     if (theta) {
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 6 && i < nb; i++) {
             printf("Theta[%d]: %.2f\n", i, theta[i]);
-            printf("Evapotranspiration_days[%d]: %.2f\n", i, Evapotranspiration_days(meteos, nb-1)[i]);
-            printf("Infiltration[%d]: %.2f\n", i, compute_infiltration(Sorptivity, nb-1, A1)[i]);
-            printf("Drainage: %.2f\n", Drainage);
         }
-    
+
         /* Save to CSV */
-        if (save_theta_csv(output_csv, meteos, theta, nb - 1)) {
+        if (save_theta_csv(output_csv, meteos, theta, (int)nb)) {
             printf("Theta saved to %s\n", output_csv);
         } else {
             fprintf(stderr, "Failed to save theta CSV.\n");
         }
-    
+
         free(theta);
     }
+
     free(radiation);
     free(temperature);
     free(meteos);

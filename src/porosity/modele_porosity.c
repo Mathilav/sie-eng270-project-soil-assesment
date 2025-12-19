@@ -3,7 +3,7 @@
 
 /* ---------- Data structures ---------- */
 
-/* One input line from the CSV file */
+/* One input record read from the CSV file */
 struct PorosityRecord {
     int    date;      /* YYYYMMDD */
     int    passes;    /* number of passes N */
@@ -22,14 +22,14 @@ struct ModelParams {
     double a;      /* slope for rho_t(w) */
     double Pref;
     double w0;
-    double p0;     /* rho_t,0 : textural density at w0 */
+    double p0;     /* rho_t,0: textural density at w0 */
 };
 
-/* Layer-specific parameters (one soil horizon) */
+/* Layer-specific parameters for one soil horizon */
 struct Horizon {
-    double depth_m;   /* depth in meters */
-    double bulk_density_initial;  /* initial bulk density (uncompacted) */
-    double bulk_density_current;  /* current bulk density, updated over time */
+    double depth_m;             /* depth in meters */
+    double bulk_density_init;   /* initial bulk density (t = 0, uncompacted) */
+    double bulk_density_curr;   /* current bulk density, updated over time */
 };
 
 /* ---------- Model functions ---------- */
@@ -79,21 +79,23 @@ static double textural_density(double w, const struct ModelParams *mp)
 #define MAX_LINES 7000
 #define BUF       100
 
+/* Parse one CSV line into a PorosityRecord */
 static int readPorosityRecord(const char *line, struct PorosityRecord *rec)
 {
-    int    date, passes, pressure;
+    int    d, passes, pressure;
     double water;
 
-    int n = sscanf(line, "%d,%d,%d,%lf", &date, &passes, &pressure, &water);
+    int n = sscanf(line, "%d,%d,%d,%lf", &d, &passes, &pressure, &water);
     if (n != 4) return 0;
 
-    rec->date     = date;
+    rec->date     = d;
     rec->passes   = passes;
     rec->pressure = pressure;
     rec->water    = water;
     return 1;
 }
 
+/* Read the whole CSV file into an array of records */
 static int readPorosityFile(const char *filename,
                             struct PorosityRecord *records, int max_records)
 {
@@ -138,7 +140,7 @@ int main(int argc, char *argv[])
         .p0     = 2.20
     };
 
-    /* 7 soil horizons */
+    /* Seven soil horizons */
     #define NH 7
     struct Horizon horizons[NH] = {
         {0.05, 1.13, 0.0},
@@ -152,7 +154,7 @@ int main(int argc, char *argv[])
 
     /* Initialize current bulk density to initial value (uncompacted state) */
     for (int h = 0; h < NH; h++) {
-        horizons[h].bulk_density_current = horizons[h].bulk_density_initial;
+        horizons[h].bulk_density_curr = horizons[h].bulk_density_init;
     }
 
     const char *input_csv  = (argc > 1 ? argv[1] : "results/data_porosity_full.csv");
@@ -161,7 +163,7 @@ int main(int argc, char *argv[])
     struct PorosityRecord records[MAX_LINES];
     int n_records = readPorosityFile(input_csv, records, MAX_LINES);
     if (n_records <= 0) {
-        fprintf(stderr, "Error reading file, n_records = %d\n", n_records);
+        fprintf(stderr, "Error reading input file, n_records = %d\n", n_records);
         return 1;
     }
 
@@ -171,17 +173,17 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* Add columns Operation and PressionMax_kPa */
+    /* Output header, adding Operation and PressionMax_kPa columns */
     fprintf(fout,
             "Date_interv,WaterContent,Horizon,Depth_m,Porosity,Operation,PressionMax_kPa\n");
 
     /* Group by date and compute multi-machine effect with memory */
     int i = 0;
     while (i < n_records) {
-        int    current_date = records[i].date;
+        int    current_date  = records[i].date;
         double current_water = records[i].water;
 
-        /* Find block [i, j) of lines for this date */
+        /* Find block [i, j) for the same date */
         int j = i + 1;
         while (j < n_records && records[j].date == current_date) {
             j++;
@@ -189,7 +191,7 @@ int main(int argc, char *argv[])
         int n_records_day = j - i;
         const struct PorosityRecord *block = &records[i];
 
-        /* Operation indicator and max pressure for the day */
+        /* Operation indicator and maximum pressure for the day */
         int    operation_flag = 0;
         double pressure_day   = 0.0;
 
@@ -204,7 +206,7 @@ int main(int argc, char *argv[])
             pressure_day = maxP;
         }
 
-        /* For each horizon: update bulk density and compute porosity */
+        /* For each horizon: accumulate Δrho_a, then compute porosity */
         for (int h = 0; h < NH; h++) {
 
             /* Sum contributions of all machines for this day at this horizon */
@@ -219,7 +221,7 @@ int main(int argc, char *argv[])
             }
 
             /* Update current bulk density */
-            horizons[h].bulk_density_current += delta_rho_total;
+            horizons[h].bulk_density_curr += delta_rho_total;
 
             /* Compute textural density rho_t(w) for this day */
             double rho_t = textural_density(current_water, &mp);
@@ -228,7 +230,7 @@ int main(int argc, char *argv[])
             }
 
             /* Structural porosity for this day */
-            double phi = 1.0 - horizons[h].bulk_density_current / rho_t;
+            double phi = 1.0 - horizons[h].bulk_density_curr / rho_t;
             if (phi < 0.0) phi = 0.0;
             if (phi > 1.0) phi = 1.0;
 

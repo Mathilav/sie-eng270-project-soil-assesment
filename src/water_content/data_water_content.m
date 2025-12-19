@@ -1,7 +1,7 @@
 function data_water_content(input_temp_file, input_sun_file, output_file)
     % data_water_content
-    %   Build a daily meteorological table (temperature, precipitation, radiation)
-    %   for the ST QUENTIN station and write it to a CSV file.
+    %   Build a daily meteorological table (temperature, precipitation,
+    %   radiation and their monthly means) for the ST QUENTIN station.
     %
     % Parameters
     %   input_temp_file : path to temperature / precipitation file
@@ -10,7 +10,7 @@ function data_water_content(input_temp_file, input_sun_file, output_file)
     
         %% 1) Temperature and precipitation data
     
-        temp_table = readtable(input_temp_file);
+        temp_table   = readtable(input_temp_file);
         station_name = 'ST QUENTIN';
     
         % Filter selected station
@@ -27,7 +27,7 @@ function data_water_content(input_temp_file, input_sun_file, output_file)
         % Monthly mean of TNTXM (one row per month)
         Tmean = groupsummary(daily_temp_precip, "MonthID", "mean", "TNTXM");
         Tmean.Properties.VariableNames{'mean_TNTXM'} = 'TNTXM_monthly_mean';
-        Tmean = Tmean(:, {'MonthID', 'TNTXM_monthly_mean'});
+        Tmean = Tmean(:, {'MonthID', 'TNTXM_monthly_mean'});   % keep key + mean only
     
         % Add monthly temperature mean back to daily table
         daily_temp_precip = outerjoin(daily_temp_precip, Tmean, ...
@@ -48,7 +48,7 @@ function data_water_content(input_temp_file, input_sun_file, output_file)
         % Monthly mean of GLOT (one row per month)
         Pmean = groupsummary(daily_radiation, "MonthID", "mean", "GLOT");
         Pmean.Properties.VariableNames{'mean_GLOT'} = 'GLOT_monthly_mean';
-        Pmean = Pmean(:, {'MonthID', 'GLOT_monthly_mean'});
+        Pmean = Pmean(:, {'MonthID', 'GLOT_monthly_mean'});    % key + mean only
     
         % Add monthly radiation mean to daily temperature/precipitation table
         daily_temp_precip = outerjoin(daily_temp_precip, Pmean, ...
