@@ -56,5 +56,9 @@ dkms.conf
 
 #Maltab
 *.asv
-#panique
+
 *.csv
+
+*.DS_Store
+
+
