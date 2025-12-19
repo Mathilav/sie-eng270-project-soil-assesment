@@ -1,8 +1,7 @@
 # sie-eng270-project-soil-assesment
 # Evolution of soil compaction and water content under intensive agriculture
 ## Project Description
-Describe the purpose of the program.
-The purpose of the program is to modelise the evolution of two parameters of soil quality, water content and porosity, under agrcicultural work. It plots modelised + observed water content and porosity over time, allowing to check it accuracy.
+The purpose of the program is to modelise the evolution of two parameters of soil quality: water content and porosity, under agrcicultural work. It plots modelised + observed water content and porosity over time, allowing to check its accuracy.
 
 ## Input files
 Describe the input files used by the program. (Located in "data/".)
@@ -81,9 +80,10 @@ Baseline and verification of the model :
 emergence and yield: A dataset from a 19-year field experiment”. In: Data in Brief 39 (Dec. 2021), p. 107581.
 doi: 10.1016/j.dib.2021.10758
 Meteorological informations : Météo France. Météo.data.gouv.fr
+Note : the other references used to built the theoritical model but not directly present in the code are listed and explained in the report. 
 
 Code
 - Importation of csv in C, adaptation from https://sieprog.ch/#c/gps
 - Matlab sorting : Virus inactivation exercice https://stakahama.gitlab.io/sie-eng270/exercise_inactivation.html
 LLM 
-- ChatGPT was used in multiple C script for correction of the syntax + text processing 
+- ChatGPT was used in multiple C script for correction of the syntax + text processing
