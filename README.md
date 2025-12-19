@@ -74,6 +74,7 @@ The C programs used in this project are compiled using GCC and do not rely on MA
 The C files are saved to "bin/" directory by the compiler.
 
 ## Execute
+First add the files sent by email to '/data' (because too large for git) 
 The program can be executed by passingthe following command to the terminal:  matlab -batch "run('src/driver.m')" 
 
 ## Contributors
