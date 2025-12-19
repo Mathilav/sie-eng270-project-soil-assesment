@@ -1,63 +1,74 @@
 function data_water_content(input_temp_file, input_sun_file, output_file)
-
-    % données météorologiques
+    % data_water_content
+    %   Build a daily meteorological table (temperature, precipitation, radiation)
+    %   for the ST QUENTIN station and write it to a CSV file.
+    %
+    % Parameters
+    %   input_temp_file : path to temperature / precipitation file
+    %   input_sun_file  : path to solar radiation file
+    %   output_file     : path to output CSV file
     
-    T = readtable(input_temp_file); 
-    St_Quentin = 'ST QUENTIN';
+        %% 1) Temperature and precipitation data
     
-    % Filtrer la station
-    mask_St_quentin = strcmp(T.NOM_USUEL, St_Quentin);
-    vars = {'AAAAMMJJ','RR','TNTXM'};
-    Table_temp_precip = T(mask_St_quentin, vars);
+        temp_table = readtable(input_temp_file);
+        station_name = 'ST QUENTIN';
     
-    % Date journalière et identifiant de mois
-    Table_temp_precip.DATE_dt = datetime(Table_temp_precip.AAAAMMJJ, ...
-                                         'ConvertFrom','yyyymmdd');
-    Table_temp_precip.MonthID = year(Table_temp_precip.DATE_dt)*100 + ...
-                                month(Table_temp_precip.DATE_dt);
+        % Filter selected station
+        mask_station_temp = strcmp(temp_table.NOM_USUEL, station_name);
+        selected_vars_temp = {'AAAAMMJJ', 'RR', 'TNTXM'};
+        daily_temp_precip = temp_table(mask_station_temp, selected_vars_temp);
     
-    % Moyenne mensuelle de TNTXM (une ligne par mois)
-    Tmean = groupsummary(Table_temp_precip, "MonthID", "mean", "TNTXM");
-    Tmean.Properties.VariableNames{'mean_TNTXM'} = 'TNTXM_moy_mois';
-    Tmean = Tmean(:, {'MonthID','TNTXM_moy_mois'});   % seulement clé + moyenne
+        % Daily datetime and month identifier (YYYYMM)
+        daily_temp_precip.DATE_dt = datetime(daily_temp_precip.AAAAMMJJ, ...
+                                             'ConvertFrom', 'yyyymmdd');
+        daily_temp_precip.MonthID = year(daily_temp_precip.DATE_dt) * 100 + ...
+                                    month(daily_temp_precip.DATE_dt);
     
-    % Ajouter la moyenne mensuelle à la table journalière
-    Table_temp_precip = outerjoin(Table_temp_precip, Tmean, ...
-        "Keys","MonthID", "MergeKeys", true, "Type","left");
+        % Monthly mean of TNTXM (one row per month)
+        Tmean = groupsummary(daily_temp_precip, "MonthID", "mean", "TNTXM");
+        Tmean.Properties.VariableNames{'mean_TNTXM'} = 'TNTXM_monthly_mean';
+        Tmean = Tmean(:, {'MonthID', 'TNTXM_monthly_mean'});
     
-    % rayonnement 
-    P = readtable(input_sun_file);
-    mask_St_quentin_2 = strcmp(P.NOM_USUEL, St_Quentin);
-    variables = {'AAAAMMJJ', 'GLOT'};
-    Table_radiation = P(mask_St_quentin_2, variables);
+        % Add monthly temperature mean back to daily table
+        daily_temp_precip = outerjoin(daily_temp_precip, Tmean, ...
+            "Keys", "MonthID", "MergeKeys", true, "Type", "left");
     
-    Table_radiation.DATE_dt = datetime(Table_radiation.AAAAMMJJ, ...
-                                       'ConvertFrom','yyyymmdd');
-    Table_radiation.MonthID = year(Table_radiation.DATE_dt)*100 + ...
-                              month(Table_radiation.DATE_dt);
+        %% 2) Solar radiation data
     
-    % Moyenne mensuelle de GLOT (une ligne par mois)
-    Pmean = groupsummary(Table_radiation, "MonthID", "mean", "GLOT");
-    Pmean.Properties.VariableNames{'mean_GLOT'} = 'GLOT_moy_mois';
-    Pmean = Pmean(:, {'MonthID','GLOT_moy_mois'});    % seulement clé + moyenne
+        sun_table = readtable(input_sun_file);
+        mask_station_sun = strcmp(sun_table.NOM_USUEL, station_name);
+        selected_vars_sun = {'AAAAMMJJ', 'GLOT'};
+        daily_radiation = sun_table(mask_station_sun, selected_vars_sun);
     
-    % Ajouter la moyenne mensuelle de GLOT à la table journalière
-    Table_temp_precip = outerjoin(Table_temp_precip, Pmean, ...
-        "Keys","MonthID", "MergeKeys", true, "Type","left");
+        daily_radiation.DATE_dt = datetime(daily_radiation.AAAAMMJJ, ...
+                                           'ConvertFrom', 'yyyymmdd');
+        daily_radiation.MonthID = year(daily_radiation.DATE_dt) * 100 + ...
+                                  month(daily_radiation.DATE_dt);
     
+        % Monthly mean of GLOT (one row per month)
+        Pmean = groupsummary(daily_radiation, "MonthID", "mean", "GLOT");
+        Pmean.Properties.VariableNames{'mean_GLOT'} = 'GLOT_monthly_mean';
+        Pmean = Pmean(:, {'MonthID', 'GLOT_monthly_mean'});
     
-    Table_temp_precip = removevars(Table_temp_precip, {'DATE_dt','MonthID'});
-    % bornes de temps de notre étude, à modifier si besoins ( je ne suis pas
-    % sure des dates ) 
+        % Add monthly radiation mean to daily temperature/precipitation table
+        daily_temp_precip = outerjoin(daily_temp_precip, Pmean, ...
+            "Keys", "MonthID", "MergeKeys", true, "Type", "left");
     
-    date_debut = 19890101;
-    date_fin   = 20701231;
+        %% 3) Time window filtering
     
-    mask = (Table_temp_precip.AAAAMMJJ >= date_debut) & ...
-           (Table_temp_precip.AAAAMMJJ <= date_fin);
+        % Remove helper variables
+        daily_temp_precip = removevars(daily_temp_precip, {'DATE_dt', 'MonthID'});
     
-    Table_temp_precip_filtre = Table_temp_precip(mask, :);
+        % Time range for the study (can be adjusted if needed)
+        start_date = 19890101;
+        end_date   = 20701231;
     
-    writetable( Table_temp_precip_filtre, output_file); 
+        mask_time = (daily_temp_precip.AAAAMMJJ >= start_date) & ...
+                    (daily_temp_precip.AAAAMMJJ <= end_date);
     
+        filtered_temp_precip = daily_temp_precip(mask_time, :);
+    
+        % Write final table
+        writetable(filtered_temp_precip, output_file);
     end
+    

@@ -1,128 +1,131 @@
 #include <math.h>
 #include <stdio.h>
 
-/* ---------- Structures de données ---------- */
+/* ---------- Data structures ---------- */
 
-/* Données lues dans le CSV */
-struct LignePorosite {
-    int    date;      /* AAAAMMJJ */
-    int    passage;   /* Nb de passages N */
-    int    pression;  /* PressionMax_kPa_ (Pi) */
-    double water;     /* WaterContent w */
+/* One input line from the CSV file */
+struct PorosityRecord {
+    int    date;      /* YYYYMMDD */
+    int    passes;    /* number of passes N */
+    int    pressure;  /* PressionMax_kPa_ (Pi) */
+    double water;     /* water content w */
 };
 
-/* Paramètres globaux du modèle */
-struct ParamsModele {
+/* Global model parameters */
+struct ModelParams {
     double wc;
     double wmax;
     double c;
     double alpha;
     double lambda;
     double k1;
-    double a;      /* pente pour rho_t(w) */
+    double a;      /* slope for rho_t(w) */
     double Pref;
     double w0;
-    double p0;     /* rho_t,0 : densité texturale à w0 */
+    double p0;     /* rho_t,0 : textural density at w0 */
 };
 
-/* Paramètres spécifiques à un horizon */
+/* Layer-specific parameters (one soil horizon) */
 struct Horizon {
-    double z;      /* profondeur */
-    double pa0;    /* densité apparente initiale (t=0, non roulé) */
-    double rho_a;  /* densité apparente courante (mise à jour dans le temps) */
+    double depth_m;   /* depth in meters */
+    double bulk_density_initial;  /* initial bulk density (uncompacted) */
+    double bulk_density_current;  /* current bulk density, updated over time */
 };
 
-/* ---------- Fonctions du modèle ---------- */
+/* ---------- Model functions ---------- */
 
-static double fct_wtr_cont(double wc, double wmax, double w)
+static double water_content_factor(double wc, double wmax, double w)
 {
     if (w <= wc)   return 0.0;
     if (w <= wmax) return (w - wc) / (wmax - wc);
     return 1.0;
 }
 
-static double nmb_passages(int N, double c)
+static double passes_factor(int N, double c)
 {
     return 1.0 - exp(-c * (double)N);
 }
 
-static double pression(double Pref, double P, double alpha)
+static double pressure_factor(double Pref, double P, double alpha)
 {
     return pow(P / Pref, alpha);
 }
 
-static double profondeur(double z, double lambda)
+static double depth_factor(double depth_m, double lambda)
 {
-    return exp(-lambda * z);
+    return exp(-lambda * depth_m);
 }
 
-/* contribution d'un engin (une ligne) à Δρa */
-static double trafic_density_engin(const struct ParamsModele *pm,
-                                   double w, int N, double P, double z)
+/* Contribution of one machine (one record) to Δrho_a */
+static double traffic_density_increment(const struct ModelParams *mp,
+                                        double w, int N, double P, double depth_m)
 {
-    return pm->k1
-           * fct_wtr_cont(pm->wc, pm->wmax, w)
-           * nmb_passages(N, pm->c)
-           * pression(pm->Pref, P, pm->alpha)
-           * profondeur(z, pm->lambda);
+    return mp->k1
+           * water_content_factor(mp->wc, mp->wmax, w)
+           * passes_factor(N, mp->c)
+           * pressure_factor(mp->Pref, P, mp->alpha)
+           * depth_factor(depth_m, mp->lambda);
 }
 
-/* densité texturale rho_t(w) */
-static double rho_texturale(double w, const struct ParamsModele *pm)
+/* Textural density rho_t(w) */
+static double textural_density(double w, const struct ModelParams *mp)
 {
     /* rho_t(w) = p0 + a * (w - w0) */
-    return pm->p0 + pm->a * (w - pm->w0);
+    return mp->p0 + mp->a * (w - mp->w0);
 }
 
-/* ---------- Entrée / sortie CSV ---------- */
+/* ---------- CSV input / output ---------- */
 
-#define MAX_LIGNES 7000
-#define BUF        100
+#define MAX_LINES 7000
+#define BUF       100
 
-static int lireLignePorosite(const char *ligne, struct LignePorosite *L)
+static int readPorosityRecord(const char *line, struct PorosityRecord *rec)
 {
-    int d, p, pr;
-    double w;
+    int    date, passes, pressure;
+    double water;
 
-    int n = sscanf(ligne, "%d,%d,%d,%lf", &d, &p, &pr, &w);
+    int n = sscanf(line, "%d,%d,%d,%lf", &date, &passes, &pressure, &water);
     if (n != 4) return 0;
 
-    L->date     = d;
-    L->passage  = p;
-    L->pression = pr;
-    L->water    = w;
+    rec->date     = date;
+    rec->passes   = passes;
+    rec->pressure = pressure;
+    rec->water    = water;
     return 1;
 }
 
-static int lireFichierPorosite(const char *nom,
-                               struct LignePorosite *tab, int max)
+static int readPorosityFile(const char *filename,
+                            struct PorosityRecord *records, int max_records)
 {
-    FILE *f = fopen(nom, "r");
+    FILE *f = fopen(filename, "r");
     if (f == NULL) return -1;
 
     char buffer[BUF];
 
-    /* sauter l'en‑tête */
+    /* Skip header line */
     if (fgets(buffer, sizeof buffer, f) == NULL) {
         fclose(f);
         return 0;
     }
+
     int n = 0;
     while (fgets(buffer, sizeof buffer, f) != NULL) {
-        if (n >= max) break;
-        if (lireLignePorosite(buffer, &tab[n])) n++;
+        if (n >= max_records) break;
+        if (readPorosityRecord(buffer, &records[n])) {
+            n++;
+        }
     }
 
     fclose(f);
     return n;
 }
 
-/* ---------- Programme principal ---------- */
+/* ---------- Main program ---------- */
 
 int main(int argc, char *argv[])
 {
-    /* paramètres globaux du modèle */
-    struct ParamsModele pm = {
+    /* Global model parameters */
+    struct ModelParams mp = {
         .wc     = 0.20,
         .wmax   = 0.32,
         .c      = 0.9,
@@ -135,9 +138,9 @@ int main(int argc, char *argv[])
         .p0     = 2.20
     };
 
-    /* 7 horizons */
+    /* 7 soil horizons */
     #define NH 7
-    struct Horizon H[NH] = {
+    struct Horizon horizons[NH] = {
         {0.05, 1.13, 0.0},
         {0.10, 1.10, 0.0},
         {0.15, 1.07, 0.0},
@@ -147,88 +150,92 @@ int main(int argc, char *argv[])
         {0.35, 1.42, 0.0}
     };
 
-    /* initialiser rho_a courant = pa0 (état initial) */
+    /* Initialize current bulk density to initial value (uncompacted state) */
     for (int h = 0; h < NH; h++) {
-        H[h].rho_a = H[h].pa0;
+        horizons[h].bulk_density_current = horizons[h].bulk_density_initial;
     }
 
-    const char *filename = (argc > 1 ? argv[1] : "results/data_porosity_full.csv");
+    const char *input_csv  = (argc > 1 ? argv[1] : "results/data_porosity_full.csv");
     const char *output_csv = (argc > 2 ? argv[2] : "results/data_porosity_full_out.csv");
 
-    struct LignePorosite lignes[MAX_LIGNES];
-    int nb = lireFichierPorosite(filename,
-                                 lignes, MAX_LIGNES);
-    if (nb <= 0) {
-        fprintf(stderr, "Erreur lecture fichier, nb = %d\n", nb);
+    struct PorosityRecord records[MAX_LINES];
+    int n_records = readPorosityFile(input_csv, records, MAX_LINES);
+    if (n_records <= 0) {
+        fprintf(stderr, "Error reading file, n_records = %d\n", n_records);
         return 1;
     }
 
     FILE *fout = fopen(output_csv, "w");
     if (fout == NULL) {
-        fprintf(stderr, "Impossible d'ouvrir %s\n", output_csv);
+        fprintf(stderr, "Cannot open %s\n", output_csv);
         return 1;
     }
 
-    /* ajout des colonnes Operation et PressionMax_kPa */
+    /* Add columns Operation and PressionMax_kPa */
     fprintf(fout,
             "Date_interv,WaterContent,Horizon,Depth_m,Porosity,Operation,PressionMax_kPa\n");
 
-    /* regroupement par date + calcul multi‑engins avec mémoire */
+    /* Group by date and compute multi-machine effect with memory */
     int i = 0;
-    while (i < nb) {
-        int    date_courante = lignes[i].date;
-        double w_courant     = lignes[i].water;
+    while (i < n_records) {
+        int    current_date = records[i].date;
+        double current_water = records[i].water;
 
+        /* Find block [i, j) of lines for this date */
         int j = i + 1;
-        while (j < nb && lignes[j].date == date_courante) j++;
-        int n_lignes_jour = j - i;
-        const struct LignePorosite *bloc = &lignes[i];
+        while (j < n_records && records[j].date == current_date) {
+            j++;
+        }
+        int n_records_day = j - i;
+        const struct PorosityRecord *block = &records[i];
 
-        /* opération agricole + pression max du jour */
-        int operation = 0;
-        double pression_jour = 0.0;
+        /* Operation indicator and max pressure for the day */
+        int    operation_flag = 0;
+        double pressure_day   = 0.0;
 
-        if (n_lignes_jour > 0) {
-            operation = 1;
+        if (n_records_day > 0) {
+            operation_flag = 1;
             double maxP = 0.0;
-            for (int k = 0; k < n_lignes_jour; k++) {
-                if ((double)bloc[k].pression > maxP) {
-                    maxP = (double)bloc[k].pression;
+            for (int k = 0; k < n_records_day; k++) {
+                if ((double)block[k].pressure > maxP) {
+                    maxP = (double)block[k].pressure;
                 }
             }
-            pression_jour = maxP;
+            pressure_day = maxP;
         }
 
-        /* pour chaque horizon : ajouter Δrho_a du jour à rho_a courant, puis calculer phi */
+        /* For each horizon: update bulk density and compute porosity */
         for (int h = 0; h < NH; h++) {
 
-            /* somme des contributions des engins du jour à cet horizon */
-            double delta_total = 0.0;
-            for (int k = 0; k < n_lignes_jour; k++) {
-                const struct LignePorosite *L = &bloc[k];
-                delta_total += trafic_density_engin(&pm,
-                                                    L->water,
-                                                    L->passage,
-                                                    (double)L->pression,
-                                                    H[h].z);
+            /* Sum contributions of all machines for this day at this horizon */
+            double delta_rho_total = 0.0;
+            for (int k = 0; k < n_records_day; k++) {
+                const struct PorosityRecord *rec = &block[k];
+                delta_rho_total += traffic_density_increment(&mp,
+                                                             rec->water,
+                                                             rec->passes,
+                                                             (double)rec->pressure,
+                                                             horizons[h].depth_m);
             }
 
-            /* mise à jour de la densité apparente courante */
-            H[h].rho_a += delta_total;
+            /* Update current bulk density */
+            horizons[h].bulk_density_current += delta_rho_total;
 
-            /* calcul de rho_t(w) pour ce jour */
-            double rho_t = rho_texturale(w_courant, &pm);
-            if (rho_t <= 0.0) rho_t = 1e-6; /* sécurité numérique */
+            /* Compute textural density rho_t(w) for this day */
+            double rho_t = textural_density(current_water, &mp);
+            if (rho_t <= 0.0) {
+                rho_t = 1e-6; /* numerical safety */
+            }
 
-            /* porosité structurale du jour */
-            double phi = 1.0 - H[h].rho_a / rho_t;
+            /* Structural porosity for this day */
+            double phi = 1.0 - horizons[h].bulk_density_current / rho_t;
             if (phi < 0.0) phi = 0.0;
             if (phi > 1.0) phi = 1.0;
 
             fprintf(fout, "%d,%.6f,%d,%.4f,%.10f,%d,%.2f\n",
-                    date_courante, w_courant,
-                    h + 1, H[h].z, phi,
-                    operation, pression_jour);
+                    current_date, current_water,
+                    h + 1, horizons[h].depth_m, phi,
+                    operation_flag, pressure_day);
         }
 
         i = j;
