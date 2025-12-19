@@ -75,15 +75,16 @@ Flora Journet
 
 ## Acknowledgments
 Data Sources : 
-Baseline and verification of the model : 
+* Baseline and verification of the model : 
  J. R. Lamichhane et al. “Effect of cropping systems and climate on soil physical characteristics, field crop
 emergence and yield: A dataset from a 19-year field experiment”. In: Data in Brief 39 (Dec. 2021), p. 107581.
 doi: 10.1016/j.dib.2021.10758
-Meteorological informations : Météo France. Météo.data.gouv.fr
-Note : the other references used to built the theoritical model but not directly present in the code are listed and explained in the report. 
+*Meteorological informations : Météo France. Météo.data.gouv.fr
+*Note : the other references used to built the theoritical model but not directly present in the code are listed and explained in the report. 
 
 Code
 - Importation of csv in C, adaptation from https://sieprog.ch/#c/gps
 - Matlab sorting : Virus inactivation exercice https://stakahama.gitlab.io/sie-eng270/exercise_inactivation.html
-LLM 
+LLM
+
 - ChatGPT was used in multiple C script for correction of the syntax + text processing
